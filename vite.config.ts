@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -16,6 +17,38 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
+      {
+        name: 'html-robots-transform',
+        transformIndexHtml(html) {
+          const target = env.VITE_APP_TARGET || process.env.VITE_APP_TARGET;
+          if (target === 'admin' || target === 'employee') {
+            return html.replace(
+              /<meta\s+name="robots"\s+content="[^"]*">/i,
+              '<meta name="robots" content="noindex, nofollow">'
+            );
+          }
+          return html;
+        }
+      },
+      {
+        name: 'generate-subdomain-robots-txt',
+        closeBundle() {
+          const target = env.VITE_APP_TARGET || process.env.VITE_APP_TARGET;
+          if (target === 'admin' || target === 'employee') {
+            const outDir = target === 'admin' ? 'dist-admin' : 'dist-employee';
+            const robotsPath = path.resolve(__dirname, outDir, 'robots.txt');
+            const content = `# Disallow all search engine indexing for internal ${target} portal\nUser-agent: *\nDisallow: /\n`;
+            try {
+              if (fs.existsSync(path.resolve(__dirname, outDir))) {
+                fs.writeFileSync(robotsPath, content, 'utf8');
+                console.log(`[Vite] Generated private noindex robots.txt in ${outDir}/robots.txt`);
+              }
+            } catch (err) {
+              console.warn('[Vite] Could not write robots.txt:', err);
+            }
+          }
+        }
+      },
       VitePWA({
         // For admin portal: self-destruct the service worker so old cached JS can't persist.
         // Admins are always online, no need for offline caching.
